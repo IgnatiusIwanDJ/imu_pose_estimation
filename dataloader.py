@@ -1,16 +1,19 @@
+#!/usr/bin/env python3
 import glob
 import csv
 from torch.utils.data import Dataset
+import torch
 
 class ImuPoseDataset(Dataset):
     """Dataset containing IMU pose"""
 
-    def __init__(self, files, transform=None):
+    def __init__(self, files, transform=None, include_null=False):
         """
         Args:
             files (list): list containing file names.
             transform (callable, optional): Optional transform to be applied
                 on a sample.
+            include_null (bool): Optional, if want to load data will null class
         """
         self.train_data = []
         self.labels = []
@@ -18,9 +21,13 @@ class ImuPoseDataset(Dataset):
             with open(file) as csv_file:
                 csv_reader = csv.reader(csv_file, delimiter=',')
                 for row in csv_reader:
-                    if int(row[21]) != 0:
+                    if include_null:
                         self.train_data.append([float(item) for item in row[0:21]])
                         self.labels.append(int(row[21]))
+                    elif int(row[21]) != 0:
+                        self.train_data.append([float(item) for item in row[0:21]])
+                        self.labels.append(int(row[21])-1)
+
         self.transform = transform
 
     def __len__(self):
@@ -36,6 +43,15 @@ class ImuPoseDataset(Dataset):
     def __getitem__(self, idx):
         data = self.train_data[idx]
         label = self.labels[idx]
+
+        # convert to tensor
+        data = torch.tensor(data)
+        label = torch.tensor(label)
+        # normalize value
+        data = torch.unsqueeze(data, 0)
+        data_std = data.std(dim=1, keepdim=True)
+        data_mean = data.mean(dim=1, keepdim=True)
+        data = (data - data_mean) / data_std
 
         if self.transform:
             data = self.transform(data)
