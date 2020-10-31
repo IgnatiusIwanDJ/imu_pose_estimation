@@ -13,6 +13,7 @@ from util import check_mkdir, load_ckp, save_ckp, connect_to_workers
 from dataloader import ImuPoseDataset
 from model import CnnModel
 import sklearn.metrics as metrics
+from tensorboardX import SummaryWriter
 
 INPUT_SIZE = 1
 """
@@ -36,9 +37,10 @@ def get_dataloader(train_files,valid_files,batch_size,workers,include_null_class
                                                 .federate(workers), # <-- we distribute the dataset across all the workers, it's now a FederatedDataset
                                                 batch_size=batch_size,
                                                 drop_last=True,
+                                                shuffle=True,
                                                 **kwargs)
 
-    valid_loader = torch.utils.data.DataLoader(valid_dataset, batch_size=batch_size, drop_last=True,**kwargs)
+    valid_loader = torch.utils.data.DataLoader(valid_dataset, batch_size=batch_size, drop_last=True,shuffle=True,**kwargs)
 
     return federated_train_loader,valid_loader
 
@@ -53,7 +55,7 @@ def get_args():
     parser.add_argument('-lr','--learning_rate', type=float, default=0.01, help='Learning rate for training')
     parser.add_argument('--learning_patience', type=int, default=10, help='Loss not decreasing patience before changing learning rate')
     parser.add_argument('-c','--checkpoint', type=str, default='', help='Checkpoint file from last training')
-    parser.add_argument('--include_null_class', type=bool,default=False, help='Include Null classes')
+    parser.add_argument('--include_null_class', action="store_true", help='Include Null classes')
     parser.add_argument('-n','--saved_model_name', type=str, default='pose_estimator', help='Name for model result')
     return parser.parse_args()
 
@@ -98,16 +100,27 @@ def train(args, model, criterion, optimizer, train_loader, gpu_found = False, va
     # folder to save model
     if save_folder != '' and os.path.exists(save_folder):
         model_path = save_folder
+        ckpth_path = os.path.join(save_folder,'checkpoint.pt')
     else:
         check_mkdir(os.path.join('model/trained_model', time_today))
         model_path = os.path.join('model/trained_model', time_today, clock)
     check_mkdir(model_path)
 
+    # start logging tensorboard
+    check_mkdir(os.path.join('log/train_log', time_today))
+    log_path = os.path.join('log/train_log', time_today, clock)
+    check_mkdir(log_path)
+    writer = SummaryWriter(log_path, comment = "{}_Start at{}_LR_{}_BATCH_{}".format(time_today,clock,learning_rate,batch_size))
+
+    # draw model graph
+    data, label = next(iter(train_loader))
+    writer.add_graph(model, data.get().to(device))
+
     # start training
     print('--------------------------------------------------------------------------------------------')
     print('Train params: Epochs:{}, Batch Size: {}, Learning Rate: {}'.format(max_epoch,batch_size,learning_rate))
     print('\t\tCheckpoint saved to: {}'.format(ckpth_path))
-    print('\t\tSaving Model to: {}'.format(model_path))
+    print('\t\tSaving Model to: {}/{}.pt'.format(model_path,model_save))
     print('\t\tStart at Epoch: {}'.format(start_epoch))
     print(device_used)
     print('--------------------------------------------------------------------------------------------')
@@ -141,18 +154,20 @@ def train(args, model, criterion, optimizer, train_loader, gpu_found = False, va
             model.get()
             # get the loss back
             loss = loss.get()
-            train_loss += loss
+            train_loss += loss.item()
 
-            if batch_idx % 50 == 0:
+            if batch_idx % 500 == 499:
                 print('Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}'.format(
                 epoch, batch_idx * batch_size, len(train_loader) * batch_size,
-                100. * batch_idx / len(train_loader), loss.item()))
+                100. * batch_idx / len(train_loader), train_loss / batch_idx ))
 
         ######################
         # validate the model #
         ######################
-        accuracy = 0
-        f1score = 0
+        accuracy = 0.0
+        f1score = 0.0
+        recall = 0.0
+        precision = 0.0
 
         model.eval()
         for data, target in valid_loader:
@@ -166,12 +181,20 @@ def train(args, model, criterion, optimizer, train_loader, gpu_found = False, va
             valid_loss.append(loss.item())
             # calculate metrics
             top_p, top_class = output.topk(1, dim=1)
-            equals = top_class == target.view(*top_class.shape).long()
-            accuracy += torch.mean(equals.type(torch.FloatTensor))
-            f1score += metrics.f1_score(top_class.cpu(), target.view(*top_class.shape).long().cpu(), average='weighted')
+            eval_pred = top_class.view(-1).long().cpu().numpy()
+            eval_target = target.long().cpu().numpy()
+            #equals = top_class == target.view(*top_class.shape).long()
+            accuracy += metrics.accuracy_score(eval_target, eval_pred)
+            f1score += metrics.f1_score(eval_target, eval_pred, average='weighted')
+            recall += metrics.recall_score(eval_target, eval_pred, average='weighted')
+            precision += metrics.precision_score(eval_target, eval_pred, average='weighted')
 
         # calculate average losses
         valid_loss = np.mean(valid_loss)
+        train_loss = train_loss / len(train_loader)
+        # log
+        writer.add_scalar("train_loss", train_loss, epoch)
+        writer.add_scalar("valid_loss", valid_loss, epoch)
 
         # print training/validation statistics
         print('Epoch: {} \tTraining Loss: {:.6f} \tValidation Loss: {:.6f}'.format(
@@ -184,9 +207,14 @@ def train(args, model, criterion, optimizer, train_loader, gpu_found = False, va
             print('Validation loss decreased ({:.6f} --> {:.6f}).  Saving model ...'.format(
             valid_loss_min,
             valid_loss))
-            print('Accuracy: {:.6f}\t F1-score:{:.6f}'.format(
-            accuracy/(len(valid_loader)//batch_size),
-            f1score/(len(valid_loader)//batch_size)))
+            f1_total = f1score/(len(valid_loader))
+            acc_total = accuracy/(len(valid_loader))
+            precision_total = precision/(len(valid_loader))
+            recall_total = recall/(len(valid_loader))
+            print('F1-score: {:.6f}\t Accuracy:{:.6f}\t Precission:{:.6f}\t Recall:{:.6f}'.format(
+            f1_total, acc_total, precision_total, recall_total))
+            writer.add_text('model_epoch_{}_train_loss_{}_val_loss_{}'.format(epoch,train_loss,valid_loss),
+            'F1: {:.4f} Acc: {:.4f} Prec: {:.4f} Rec: {:.4f}'.format(f1_total, acc_total, precision_total, recall_total))
             torch.save(model.state_dict(), model_path+'/{}.pt'.format(model_save))
             valid_loss_min = valid_loss
 
@@ -201,7 +229,9 @@ def train(args, model, criterion, optimizer, train_loader, gpu_found = False, va
         # save checkpoint
         save_ckp(checkpoint, ckpth_path)
 
+    writer.close()
     print('training end....')
+
 
 if __name__ == '__main__':
     hook = sy.TorchHook(torch)
