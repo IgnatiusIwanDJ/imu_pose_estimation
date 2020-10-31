@@ -192,9 +192,18 @@ def train(args, model, criterion, optimizer, train_loader, gpu_found = False, va
         # calculate average losses
         valid_loss = np.mean(valid_loss)
         train_loss = train_loss / len(train_loader)
-        # log
+        # calculate metrics
+        f1_total = f1score/(len(valid_loader))
+        acc_total = accuracy/(len(valid_loader))
+        precision_total = precision/(len(valid_loader))
+        recall_total = recall/(len(valid_loader))
+
         writer.add_scalar("train_loss", train_loss, epoch)
         writer.add_scalar("valid_loss", valid_loss, epoch)
+        writer.add_scalar("Accuracy", acc_total, epoch)
+        writer.add_scalar("F1 Score", f1_total, epoch)
+        writer.add_scalar("Recall", recall_total, epoch)
+        writer.add_scalar("Precision", precision_total, epoch)
 
         # print training/validation statistics
         print('Epoch: {} \tTraining Loss: {:.6f} \tValidation Loss: {:.6f}'.format(
@@ -207,10 +216,6 @@ def train(args, model, criterion, optimizer, train_loader, gpu_found = False, va
             print('Validation loss decreased ({:.6f} --> {:.6f}).  Saving model ...'.format(
             valid_loss_min,
             valid_loss))
-            f1_total = f1score/(len(valid_loader))
-            acc_total = accuracy/(len(valid_loader))
-            precision_total = precision/(len(valid_loader))
-            recall_total = recall/(len(valid_loader))
             print('F1-score: {:.6f}\t Accuracy:{:.6f}\t Precission:{:.6f}\t Recall:{:.6f}'.format(
             f1_total, acc_total, precision_total, recall_total))
             writer.add_text('model_epoch_{}_train_loss_{}_val_loss_{}'.format(epoch,train_loss,valid_loss),
