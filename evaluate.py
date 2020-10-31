@@ -25,7 +25,7 @@ def get_args():
     parser.add_argument('--include_null_class', action="store_true", help='Include Null classes')
     return parser.parse_args()
 
-def test(test_loader, model, use_gpu, args):
+def test(test_loader, args, use_gpu=False):
     # parse args
     accuracy = 0.0
     f1score = 0.0
@@ -42,7 +42,9 @@ def test(test_loader, model, use_gpu, args):
 
     # check if CUDA is available
     device = torch.device("cuda" if use_gpu else "cpu")
+    model = CnnModel(INPUT_SIZE,NUM_CLASSES)
     model = model.to(device)
+    model.load_state_dict(torch.load(model_path))
 
     if save_result == '':
         filename = 'result_{}.json'.format(os.path.splitext(os.path.basename(model_path))[0])
@@ -143,8 +145,4 @@ if __name__ == '__main__':
     kwargs = {'num_workers': 1, 'pin_memory': True} if gpu_found else {}
     test_loader = torch.utils.data.DataLoader(test_dataset, batch_size = args.batch_size, shuffle=True, **kwargs)
 
-    # args, model, workers args.include_null_class
-    model = CnnModel(INPUT_SIZE,NUM_CLASSES)
-    model.load_state_dict(torch.load(args.model_path))
-
-    test(test_loader, model, gpu_found, vars(args))
+    test(test_loader, vars(args), gpu_found)

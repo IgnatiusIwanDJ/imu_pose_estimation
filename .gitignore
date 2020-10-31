@@ -5,3 +5,5 @@ test/*
 model/trained_model/*
 log/checkpoint/*
 log/train_log/*
+model/pose_estimator.pt
+result/*
