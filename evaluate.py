@@ -2,6 +2,7 @@
 import os
 import torch
 import glob
+import json
 import argparse
 import datetime
 import sklearn.metrics as metrics
@@ -34,6 +35,7 @@ def test(test_loader, model, use_gpu, args):
     model_path = args['model_path']
     save_result = args['save_result']
     batch_size = args['batch_size']
+    include_null_class = args['include_null_class']
 
     time_today = str(datetime.date.today())
     clock = datetime.datetime.now().strftime('%H-%M-%S')
@@ -49,11 +51,17 @@ def test(test_loader, model, use_gpu, args):
 
     model.eval()
     json_data = {}
+    json_index = 0
+
+    print('--------------------------------------------------------------------------------------------')
+    print('Evaluating Model with Batch Size: {}'.format(batch_size))
+    print('Data for testing: {}'.format(len(test_loader)*batch_size))
+    print('--------------------------------------------------------------------------------------------')
 
     print('Evaluating model, please wait...')
     # iterate over test data
     with torch.no_grad():
-        for batch_idx, (data, target) in enumerate(test_loader):
+        for batch_idx, (data, target, old_data) in enumerate(test_loader):
             # move tensors to GPU if CUDA is available
             data, target = data.to(device), target.to(device)
             # forward pass: compute predicted outputs by passing inputs to the model
@@ -72,6 +80,35 @@ def test(test_loader, model, use_gpu, args):
                 batch_idx * batch_size, len(test_loader) * batch_size,
                 100. * batch_idx / len(test_loader)))
             # iterate over batch
+            for index,item in enumerate(old_data):
+                row = item.cpu().numpy()[0]
+                # build json
+                json_data[json_index] = []
+                if include_null_class:
+                    json_data[json_index].append({
+                    'chest_acc': [str(row[0]),str(row[1]),str(row[2])],
+                    'left_ankle_acc': [str(row[3]),str(row[4]),str(row[5])],
+                    'left_ankle_gyro': [str(row[6]),str(row[7]),str(row[8])],
+                    'left_ankle_mag': [str(row[9]),str(row[10]),str(row[11])],
+                    'right_ankle_acc': [str(row[12]),str(row[13]),str(row[14])],
+                    'right_ankle_gyro': [str(row[15]),str(row[16]),str(row[17])],
+                    'right_ankle_mag': [str(row[18]),str(row[19]),str(row[20])],
+                    'actual_label': str(eval_target[index]),
+                    'predicted_label': str(eval_pred[index])
+                    })
+                else:
+                    json_data[json_index].append({
+                    'chest_acc': [str(row[0]),str(row[1]),str(row[2])],
+                    'left_ankle_acc': [str(row[3]),str(row[4]),str(row[5])],
+                    'left_ankle_gyro': [str(row[6]),str(row[7]),str(row[8])],
+                    'left_ankle_mag': [str(row[9]),str(row[10]),str(row[11])],
+                    'right_ankle_acc': [str(row[12]),str(row[13]),str(row[14])],
+                    'right_ankle_gyro': [str(row[15]),str(row[16]),str(row[17])],
+                    'right_ankle_mag': [str(row[18]),str(row[19]),str(row[20])],
+                    'actual_label': str(eval_target[index]+1),
+                    'predicted_label': str(eval_pred[index]+1)
+                    })
+                json_index +=1
 
         # calculate metrics
         f1_total = f1score/(len(test_loader))
@@ -88,6 +125,9 @@ def test(test_loader, model, use_gpu, args):
         print("Recall: {}".format(recall_total))
         print("--------------------------------------------")
 
+        with open(os.path.join('result',filename), 'w') as outfile:
+            json.dump(json_data, outfile)
+
 
 if __name__ == '__main__':
     args = get_args()
@@ -95,7 +135,7 @@ if __name__ == '__main__':
     gpu_found = torch.cuda.is_available()
     # data
     files = glob.glob(args.test_folder+"/*.csv")
-    test_dataset = ImuPoseDataset(files = files, include_null = args.include_null_class)
+    test_dataset = ImuPoseDataset(files = files, include_null = args.include_null_class, return_old_data = True)
     if args.include_null_class:
         NUM_CLASSES = 7
         LABEL = ['No Activity','Standing still', 'Sitting and relaxing', 'Lying down', 'Walking', 'Climbing', 'Running']
