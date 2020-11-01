@@ -164,10 +164,8 @@ def train(args, model, criterion, optimizer, train_loader, gpu_found = False, va
         ######################
         # validate the model #
         ######################
-        accuracy = 0.0
-        f1score = 0.0
-        recall = 0.0
-        precision = 0.0
+        all_predictions = np.array([])
+        all_target = np.array([])
 
         model.eval()
         for data, target in valid_loader:
@@ -183,20 +181,18 @@ def train(args, model, criterion, optimizer, train_loader, gpu_found = False, va
             top_p, top_class = output.topk(1, dim=1)
             eval_pred = top_class.view(-1).long().cpu().numpy()
             eval_target = target.long().cpu().numpy()
-            #equals = top_class == target.view(*top_class.shape).long()
-            accuracy += metrics.accuracy_score(eval_target, eval_pred)
-            f1score += metrics.f1_score(eval_target, eval_pred, average='weighted')
-            recall += metrics.recall_score(eval_target, eval_pred, average='weighted')
-            precision += metrics.precision_score(eval_target, eval_pred, average='weighted')
+
+            all_predictions = np.append(all_predictions, eval_pred)
+            all_target =  np.append(all_target, eval_target)
 
         # calculate average losses
         valid_loss = np.mean(valid_loss)
         train_loss = train_loss / len(train_loader)
         # calculate metrics
-        f1_total = f1score/(len(valid_loader))
-        acc_total = accuracy/(len(valid_loader))
-        precision_total = precision/(len(valid_loader))
-        recall_total = recall/(len(valid_loader))
+        f1_total = metrics.f1_score(all_target, all_predictions, average='weighted')
+        acc_total = metrics.accuracy_score(all_target, all_predictions)
+        precision_total = metrics.precision_score(all_target, all_predictions, average='weighted')
+        recall_total = metrics.recall_score(all_target, all_predictions, average='weighted')
 
         writer.add_scalar("train_loss", train_loss, epoch)
         writer.add_scalar("valid_loss", valid_loss, epoch)

@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import os
 import torch
+import numpy as np
 import glob
 import json
 import argparse
@@ -27,10 +28,8 @@ def get_args():
 
 def test(test_loader, args, use_gpu=False):
     # parse args
-    accuracy = 0.0
-    f1score = 0.0
-    recall = 0.0
-    precision = 0.0
+    all_predictions = np.array([])
+    all_target = np.array([])
 
     model_path = args['model_path']
     save_result = args['save_result']
@@ -72,10 +71,8 @@ def test(test_loader, args, use_gpu=False):
             eval_pred = top_class.view(-1).long().cpu().numpy()
             eval_target = target.long().cpu().numpy()
             #equals = top_class == target.view(*top_class.shape).long()
-            accuracy += metrics.accuracy_score(eval_target, eval_pred)
-            f1score += metrics.f1_score(eval_target, eval_pred, average='weighted')
-            recall += metrics.recall_score(eval_target, eval_pred, average='weighted')
-            precision += metrics.precision_score(eval_target, eval_pred, average='weighted')
+            all_predictions = np.append(all_predictions, eval_pred)
+            all_target =  np.append(all_target, eval_target)
 
             if batch_idx % 500 == 499:
                 print('Evaluating [{}/{} ({:.0f}%)]'.format(
@@ -113,10 +110,10 @@ def test(test_loader, args, use_gpu=False):
                 json_index +=1
 
         # calculate metrics
-        f1_total = f1score/(len(test_loader))
-        acc_total = accuracy/(len(test_loader))
-        precision_total = precision/(len(test_loader))
-        recall_total = recall/(len(test_loader))
+        f1_total = metrics.f1_score(all_target, all_predictions, average='weighted')
+        acc_total = metrics.accuracy_score(all_target, all_predictions)
+        precision_total = metrics.precision_score(all_target, all_predictions, average='weighted')
+        recall_total = metrics.recall_score(all_target, all_predictions, average='weighted')
 
         print("--------------------------------------------")
         print("Model {} Performance:".format(model_path))
