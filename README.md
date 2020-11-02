@@ -38,6 +38,9 @@ Project Organization
 ## Getting started
 To start training, you can calling python files from command line or use jupyter notebooks for easy run.
 
+### Setting up dataset
+For using your own dataset you can modify the script to your use. This project use modified dataset from <i>mHealthDroid: a novel framework for agile development of mobile health applications</i> (Banos et al. 2014) and i don't own the right to distribute it. You can check the link [here](https://github.com/mHealthTechnologies/mHealthDroid).
+
 ### Installing environment (Anaconda)
 - First, you have to install anaconda/miniconda to use the yml file from env folder,
 i suggest miniconda for fast install (https://docs.conda.io/en/latest/miniconda.html)
@@ -103,9 +106,10 @@ python evaluate.py -m model/pose_predictor.pt
 ## More about Pysft
 Pysft is an awesome on-going python packages that enables user like me to easily integrate federate learning into python. PySyft decouples private data from model training, this package also support Differential Privacy, and Encrypted Computation (like Multi-Party Computation (MPC) and Homomorphic Encryption (HE)) within the main Deep Learning frameworks like PyTorch and TensorFlow.  
 
-<b>If you want to know more, look at their github: </b>https://github.com/OpenMined/PySyft
+<b>If you want to know more, check this </b>[link](https://github.com/OpenMined/PySyft).
 
 ## References
+* Banos, O., Garcia, R., Holgado-Terriza, J.A., Damas, M., Pomares, H., Rojas, I., Saez, A., Villalonga, C.:mHealthDroid: a novel framework for agile development of mobile health applications. In: Proceedings of the 6th International Work-conference on Ambient Assisted Living an Active Ageing (IWAAL 2014), Belfast, United Kingdom, December 2-5 (2014).
 * Lima, Wesllen Sousa, Eduardo Souto, Khalil El-Khatib, Roozbeh Jalali, and Joao Gama. 2019. “Human Activity Recognition Using Inertial Sensors in a Smartphone: An Overview.” Sensors 19 (14): 3213.
 * Ordóñez, Francisco Javier, and Daniel Roggen. 2016. “Deep Convolutional and LSTM Recurrent Neural Networks for Multimodal Wearable Activity Recognition.” Sensors 16 (1): 115.
 
