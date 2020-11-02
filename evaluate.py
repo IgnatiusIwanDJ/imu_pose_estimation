@@ -92,8 +92,8 @@ def test(test_loader, args, use_gpu=False):
                     'right_ankle_acc': [str(row[12]),str(row[13]),str(row[14])],
                     'right_ankle_gyro': [str(row[15]),str(row[16]),str(row[17])],
                     'right_ankle_mag': [str(row[18]),str(row[19]),str(row[20])],
-                    'actual_label': str(eval_target[index]),
-                    'predicted_label': str(eval_pred[index])
+                    'actual_label': str(int(eval_target[index])),
+                    'predicted_label': str(int(eval_pred[index]))
                     })
                 else:
                     json_data[json_index].append({
@@ -104,8 +104,8 @@ def test(test_loader, args, use_gpu=False):
                     'right_ankle_acc': [str(row[12]),str(row[13]),str(row[14])],
                     'right_ankle_gyro': [str(row[15]),str(row[16]),str(row[17])],
                     'right_ankle_mag': [str(row[18]),str(row[19]),str(row[20])],
-                    'actual_label': str(eval_target[index]+1),
-                    'predicted_label': str(eval_pred[index]+1)
+                    'actual_label': str(int(eval_target[index])+1),
+                    'predicted_label': str(int(eval_pred[index])+1)
                     })
                 json_index +=1
 
@@ -114,7 +114,8 @@ def test(test_loader, args, use_gpu=False):
         acc_total = metrics.accuracy_score(all_target, all_predictions)
         precision_total = metrics.precision_score(all_target, all_predictions, average='weighted')
         recall_total = metrics.recall_score(all_target, all_predictions, average='weighted')
-
+        available_class = np.bincount(all_target.astype(int))
+        conf_matrix = metrics.confusion_matrix(all_target, all_predictions)
         print("--------------------------------------------")
         print("Model {} Performance:".format(model_path))
         print("--------------------------------------------")
@@ -123,6 +124,12 @@ def test(test_loader, args, use_gpu=False):
         print("Precission: {}".format(precision_total))
         print("Recall: {}".format(recall_total))
         print("--------------------------------------------")
+        print("--------------------------------------------")
+        print("Correct prediction")
+        for index, counted_class in enumerate(available_class):
+            print("{} : {}/{}".format(LABEL[index], conf_matrix[index][index], counted_class))
+        print("--------------------------------------------")
+
 
         with open(os.path.join('result',filename), 'w') as outfile:
             json.dump(json_data, outfile)
